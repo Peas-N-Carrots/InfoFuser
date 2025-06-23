@@ -70,33 +70,6 @@ def cleanup_temp_files(temp_files):
         except Exception as e:
             st.warning(f"Could not delete temporary file {temp_file}: {e}")
 
-# Alternative extract function that handles the agentic_doc structure better
-def extract_documents_optimized(file_paths):
-    """
-    Optimized extraction using agentic_doc's batch processing
-    Returns a flat list of document objects
-    """
-    try:
-        # Use the batch processing feature of agentic_doc
-        from agentic_doc.parse import parse
-        
-        # Parse all files at once (more efficient)
-        all_results = parse(file_paths)
-        
-        # Flatten if needed (parse returns list of lists for multiple files)
-        flattened_docs = []
-        for result in all_results:
-            if isinstance(result, list):
-                flattened_docs.extend(result)
-            else:
-                flattened_docs.append(result)
-        
-        return flattened_docs
-    except Exception as e:
-        st.error(f"Error in optimized extraction: {e}")
-        # Fall back to original method
-        return extract(file_paths)
-
 def main():
     """Main function to run the Streamlit app"""
     # The entire Streamlit app logic is already defined above
@@ -171,20 +144,9 @@ if page == "📤 Upload Documents":
                     st.info("📄 Extracting data from documents...")
                     extracted_docs = extract(temp_files)
                     
-                    # Since parse() returns a list for each file, get the first document from each
-                    flattened_docs = []
-                    for doc_list in extracted_docs:
-                        if isinstance(doc_list, list) and len(doc_list) > 0:
-                            flattened_docs.append(doc_list[0])  # Get first document from each file
-                        else:
-                            flattened_docs.append(doc_list)
-                    
                     # Combine extracted data
                     st.info("🔗 Combining document data...")
-                    combined_data = combine(flattened_docs)
-                    
-                    # Debug: Let's see what combine returns
-                    st.write("Debug - Combined data preview:", combined_data[:200] + "..." if len(combined_data) > 200 else combined_data)
+                    combined_data = combine(extracted_docs)
                     
                     # Parse the JSON response
                     try:

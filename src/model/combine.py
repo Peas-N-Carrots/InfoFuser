@@ -1,17 +1,12 @@
-from agentic_doc.parse import parse
 from google import genai
 
+from model.jsonFormat import jsonFormat
 
-
-# Parse a local file
-# result1 = parse("doc/Examination.pdf", extraction_model=patient)
-# result2 = parse("doc/Nutrition.pdf", extraction_model=patient)
+# Uses an LLM API to combine the data of multiple medical documents into a single JSON object.
+# input: Array of extracted documents from the extract.py extract function.
+# output: A single JSON object that combines the data from all inputted documents.
 
 def combine(documents):
-    # documents = ["doc/Examination.pdf", "doc/Nutrition.pdf"]
-
-    # results = parse(documents)
-
     client = genai.Client()
 
     prompt = f"""You are an intelligent medical data assistant.
@@ -24,22 +19,14 @@ def combine(documents):
     - Avoid redundant or duplicate data
     - Preserve all unique data
     - Fields that are not filled out or non applicable may be omitted
-    - Return a single valid JSON object only, with no extra explanation
+    - Return a single valid JSON object only, with no extra explanation.
     - Format and structure the output in a way that makes the data easy to read and understandable
     """
-    # MD 1:
-    # {results[0].markdown}
-
-    # MD 2:
-    # {results[1].markdown}"""
     
     for i, doc in enumerate(documents):
-        prompt += f"\n\nMD {i}:\n{doc.markdown}"
+        prompt += f"\n\nMD {i}:\n{doc[0].markdown}"
 
     response = client.models.generate_content(
         model="gemini-2.0-flash", contents=prompt
     )
-    return response.text
-
-    # print(result1[0].extraction)
-    # print(result2[0].extraction)
+    return jsonFormat(response.text)
