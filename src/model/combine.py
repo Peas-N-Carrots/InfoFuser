@@ -19,7 +19,7 @@ def combine(documents):
     - Avoid redundant or duplicate data
     - Preserve all unique data
     - Fields that are not filled out or non applicable may be omitted
-    - Return a single valid JSON object only, with no extra explanation.
+    - Return a single valid MD object only, with no extra explanation.
     - Format and structure the output in a way that makes the data easy to read and understandable
     """
     

@@ -20,35 +20,35 @@ def advise(input):
     - Skincare and sunscreen if relevant (e.g., "Apply broad-spectrum SPF 50 zinc oxide sunscreen daily, especially if taking photosensitizing meds")
     - Behavioral or lifestyle changes, supported with examples or routines
     - Monitoring activities (e.g., "Check fasting glucose 3 times per week using home monitor")
-    - Return a single valid JSON object only, with no extra explanation
+    - Return a single valid MD object only, with no extra explanation
 
-    Return your response in this structured JSON format:
+    Return your response in this structured MD format:
 
-    {{
-    "daily_goals": [
-        "Eat a Mediterranean-style lunch with grilled salmon, quinoa, and leafy greens.",
-        "Apply SPF 50 sunscreen before going outside, especially on face and hands.",
-        "Take 10mg of Lisinopril with breakfast and monitor blood pressure after dinner."
-    ],
-    "short_term_goals": [
-        "Schedule a lipid panel blood test within the next 7 days.",
-        "Begin a light walking routine: 15 minutes after dinner, 5x/week."
-    ],
-    "medium_term_goals": [
-        "Reduce A1C to below 6.5% through consistent dietary choices and medication adherence.",
-        "Integrate 2 strength training sessions per week using bodyweight exercises like squats and wall pushups."
-    ],
-    "long_term_goals": [
-        "Maintain LDL cholesterol under 100 mg/dL and BMI in the 22–25 range.",
-        "Establish a 7–8 hour sleep schedule to support long-term cardiovascular health."
-    ],
-    "general_recommendations": [
-        "Eat fatty fish (e.g., salmon, sardines) twice a week to support heart health.",
-        "Avoid added sugars by replacing soda with sparkling water and lemon.",
-        "Use a daily fragrance-free moisturizer containing ceramides to manage dry skin.",
-        "Use a daily pill organizer to improve medication adherence."
-    ]
-    }}
+    # Health Goals & Recommendations
+
+    ## 🗓 Daily Goals
+    - Eat a Mediterranean-style lunch with grilled salmon, quinoa, and leafy greens.
+    - Apply SPF 50 sunscreen before going outside, especially on face and hands.
+    - Take 10mg of Lisinopril with breakfast and monitor blood pressure after dinner.
+
+    ## ⏳ Short-Term Goals (Next 1–2 Weeks)
+    - Schedule a lipid panel blood test within the next 7 days.
+    - Begin a light walking routine: 15 minutes after dinner, 5×/week.
+
+    ## 📆 Medium-Term Goals (1–3 Months)
+    - Reduce A1C to below 6.5% through consistent dietary choices and medication adherence.
+    - Integrate 2 strength training sessions per week using bodyweight exercises like squats and wall pushups.
+
+    ## 🏁 Long-Term Goals (3+ Months)
+    - Maintain LDL cholesterol under 100 mg/dL and BMI in the 22–25 range.
+    - Establish a 7–8 hour sleep schedule to support long-term cardiovascular health.
+
+    ## ✅ General Recommendations
+    - Eat fatty fish (e.g., salmon, sardines) twice a week to support heart health.
+    - Avoid added sugars by replacing soda with sparkling water and lemon.
+    - Use a daily fragrance-free moisturizer containing ceramides to manage dry skin.
+    - Use a daily pill organizer to improve medication adherence.
+
 
     Be detailed and personalized in your output. Make sure your suggestions are clinically safe, realistic, and adapted to the patient’s profile.
 
@@ -58,4 +58,4 @@ def advise(input):
     response = client.models.generate_content(
         model="gemini-2.0-flash", contents=prompt
     )
-    return jsonFormat(response.text)
+    return response.text

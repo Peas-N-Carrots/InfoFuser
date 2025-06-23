@@ -1,18 +1,22 @@
 import streamlit as st
+import pandas as pd
 import json
 import tempfile
 import os
-from io import BytesIO
-import pandas as pd
 from datetime import datetime
-import base64
+from typing import List, Dict, Any
+import io
 
 # Import your custom modules
-from model.extract import extract
-from model.combine import combine
-from model.advise import advise
+try:
+    from model.extract import extract
+    from model.combine import combine
+    from model.advise import advise
+except ImportError:
+    st.error("Please ensure your model modules (extract, combine, advise) are available in the model/ directory")
+    st.stop()
 
-# Set page configuration
+# Page configuration
 st.set_page_config(
     page_title="Medical Document Analyzer",
     page_icon="🏥",
@@ -20,301 +24,319 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for better styling
-st.markdown("""
-<style>
-    .main-header {
-        font-size: 2.5rem;
-        color: #1e3a8a;
-        text-align: center;
-        margin-bottom: 2rem;
-    }
-    .section-header {
-        font-size: 1.8rem;
-        color: #059669;
-        border-bottom: 2px solid #059669;
-        padding-bottom: 0.5rem;
-        margin: 2rem 0 1rem 0;
-    }
-    .info-box {
-        background-color: #f0f9ff;
-        border-left: 4px solid #0ea5e9;
-        padding: 1rem;
-        margin: 1rem 0;
-        border-radius: 0.25rem;
-    }
-    .success-box {
-        background-color: #f0fdf4;
-        border-left: 4px solid #22c55e;
-        padding: 1rem;
-        margin: 1rem 0;
-        border-radius: 0.25rem;
-    }
-    .warning-box {
-        background-color: #fffbeb;
-        border-left: 4px solid #f59e0b;
-        padding: 1rem;
-        margin: 1rem 0;
-        border-radius: 0.25rem;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-# Function to safely clean up temporary files
-def cleanup_temp_files(temp_files):
-    """Clean up temporary files"""
-    for temp_file in temp_files:
-        try:
-            if os.path.exists(temp_file):
-                os.unlink(temp_file)
-        except Exception as e:
-            st.warning(f"Could not delete temporary file {temp_file}: {e}")
-
-def main():
-    """Main function to run the Streamlit app"""
-    # The entire Streamlit app logic is already defined above
-    # This function exists to provide a proper entry point if needed
-    pass
-
 # Initialize session state
 if 'patient_profile' not in st.session_state:
-    st.session_state.patient_profile = None
+    st.session_state.patient_profile = {}
+if 'processed_documents' not in st.session_state:
+    st.session_state.processed_documents = []
 if 'recommendations' not in st.session_state:
-    st.session_state.recommendations = None
-if 'uploaded_files' not in st.session_state:
-    st.session_state.uploaded_files = []
+    st.session_state.recommendations = ""
 
-# Run the main app
-if __name__ == "__main__":
-    main()
+def save_uploaded_file(uploaded_file) -> str:
+    """Save uploaded file to temporary directory and return path"""
+    with tempfile.NamedTemporaryFile(delete=False, suffix=f".{uploaded_file.name.split('.')[-1]}") as tmp_file:
+        tmp_file.write(uploaded_file.getvalue())
+        return tmp_file.name
+
+def process_documents(file_paths: List[str]) -> Dict[str, Any]:
+    """Process uploaded documents using your model functions"""
+    try:
+        with st.spinner("Extracting data from documents..."):
+            documents = extract(file_paths)
+        
+        with st.spinner("Combining and analyzing data..."):
+            combined_data = combine(documents)
+        
+        return combined_data
+    except Exception as e:
+        st.error(f"Error processing documents: {str(e)}")
+        return {}
+
+def format_patient_data_as_markdown(data: Any, level: int = 1) -> str:
+    """Convert patient data to formatted markdown"""
+    if isinstance(data, dict):
+        markdown = ""
+        for key, value in data.items():
+            header_level = "#" * min(level + 1, 6)
+            clean_key = key.replace('_', ' ').title()
+            markdown += f"\n{header_level} {clean_key}\n\n"
+            markdown += format_patient_data_as_markdown(value, level + 1)
+        return markdown
+    elif isinstance(data, list):
+        if not data:
+            return "*No data available*\n\n"
+        markdown = ""
+        for item in data:
+            if isinstance(item, (dict, list)):
+                markdown += format_patient_data_as_markdown(item, level)
+            else:
+                markdown += f"- {str(item)}\n"
+        return markdown + "\n"
+    else:
+        return f"{str(data)}\n\n"
+
+def display_formatted_content(content: str, title: str = ""):
+    """Display content as formatted markdown with custom styling"""
+    if title:
+        st.markdown(f"## {title}")
+    
+    # Add custom CSS for better formatting
+    st.markdown("""
+    <style>
+    .medical-content {
+        background-color: #fafafa;
+        padding: 20px;
+        border-radius: 10px;
+        border-left: 4px solid #1f77b4;
+        margin: 10px 0;
+    }
+    .medical-content h1, .medical-content h2, .medical-content h3 {
+        color: #1f77b4;
+        margin-top: 20px;
+        margin-bottom: 10px;
+    }
+    .medical-content ul {
+        margin-left: 20px;
+    }
+    .medical-content li {
+        margin-bottom: 5px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Display the content in a styled container
+    st.markdown(f'<div class="medical-content">{content}</div>', unsafe_allow_html=True)
+    
+    # Also provide the raw markdown for copying
+    with st.expander("📋 View Raw Markdown", expanded=False):
+        st.code(content, language='markdown')
 
 # Sidebar navigation
-st.sidebar.title("Navigation")
+st.sidebar.title("🏥 Medical Document Analyzer")
 page = st.sidebar.selectbox(
-    "Choose a page:",
-    ["📤 Upload Documents", "👤 Patient Profile", "💡 Health Recommendations"]
+    "Navigate to:",
+    ["Upload Documents", "Patient Profile", "Health Recommendations"]
 )
 
-# Main app header
-st.markdown('<h1 class="main-header">🏥 Medical Document Analyzer</h1>', unsafe_allow_html=True)
-
-if page == "📤 Upload Documents":
-    st.markdown('<h2 class="section-header">Upload Medical Documents</h2>', unsafe_allow_html=True)
-    
-    st.markdown("""
-    <div class="info-box">
-        <strong>Instructions:</strong>
-        <ul>
-            <li>Upload PDF files or images of your medical documents</li>
-            <li>Supported formats: PDF, JPG, JPEG, PNG</li>
-            <li>Multiple files can be uploaded at once</li>
-            <li>Documents will be analyzed to create your comprehensive patient profile</li>
-        </ul>
-    </div>
-    """, unsafe_allow_html=True)
+# Main content based on selected page
+if page == "Upload Documents":
+    st.title("📄 Upload Medical Documents")
+    st.markdown("Upload your medical documents (PDF or images) to create your patient profile.")
     
     # File uploader
     uploaded_files = st.file_uploader(
-        "Choose medical document files",
-        type=['pdf', 'jpg', 'jpeg', 'png'],
+        "Choose your medical documents",
+        type=['pdf', 'png', 'jpg', 'jpeg', 'tiff', 'bmp'],
         accept_multiple_files=True,
-        key="medical_docs"
+        help="Upload PDF files or images of your medical documents"
     )
     
     if uploaded_files:
         st.success(f"✅ {len(uploaded_files)} file(s) uploaded successfully!")
         
-        # Show uploaded files
-        st.subheader("Uploaded Files:")
-        for i, file in enumerate(uploaded_files):
-            st.write(f"{i+1}. {file.name} ({file.size} bytes)")
+        # Display uploaded files
+        with st.expander("Uploaded Files", expanded=True):
+            for file in uploaded_files:
+                col1, col2, col3 = st.columns([3, 1, 1])
+                with col1:
+                    st.write(f"📄 {file.name}")
+                with col2:
+                    st.write(f"{file.size / 1024:.1f} KB")
+                with col3:
+                    st.write(file.type)
         
         # Process documents button
-        if st.button("🔄 Process Documents", type="primary"):
-            with st.spinner("Processing documents... This may take a few minutes."):
-                try:
-                    # Save uploaded files temporarily
-                    temp_files = []
-                    for file in uploaded_files:
-                        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file.name.split('.')[-1]}") as tmp_file:
-                            tmp_file.write(file.read())
-                            temp_files.append(tmp_file.name)
+        if st.button("🔍 Process Documents", type="primary"):
+            # Save uploaded files temporarily
+            temp_file_paths = []
+            try:
+                for uploaded_file in uploaded_files:
+                    temp_path = save_uploaded_file(uploaded_file)
+                    temp_file_paths.append(temp_path)
+                
+                # Process documents
+                combined_data = process_documents(temp_file_paths)
+                
+                if combined_data:
+                    st.session_state.patient_profile = combined_data
+                    st.session_state.processed_documents = [f.name for f in uploaded_files]
                     
-                    # Extract data from documents
-                    st.info("📄 Extracting data from documents...")
-                    extracted_docs = extract(temp_files)
+                    st.success("✅ Documents processed successfully!")
+                    st.balloons()
                     
-                    # Combine extracted data
-                    st.info("🔗 Combining document data...")
-                    combined_data = combine(extracted_docs)
+                    # Display summary
+                    st.subheader("📊 Processing Summary")
+                    col1, col2 = st.columns(2)
                     
-                    # Parse the JSON response
+                    with col1:
+                        st.metric("Documents Processed", len(uploaded_files))
+                        st.metric("Data Sections Extracted", len(combined_data.keys()) if combined_data else 0)
+                    
+                    with col2:
+                        st.write("**Extracted Sections:**")
+                        if combined_data:
+                            for section in combined_data.keys():
+                                st.write(f"• {section.replace('_', ' ').title()}")
+                    
+                    st.info("👉 Go to 'Patient Profile' to review and edit your data, or 'Health Recommendations' to get personalized advice.")
+                
+            except Exception as e:
+                st.error(f"Error processing documents: {str(e)}")
+            
+            finally:
+                # Clean up temporary files
+                for temp_path in temp_file_paths:
                     try:
-                        patient_profile = json.loads(combined_data)
-                        st.session_state.patient_profile = patient_profile
-                        st.session_state.uploaded_files = uploaded_files
-                        
-                        st.markdown("""
-                        <div class="success-box">
-                            <strong>✅ Processing Complete!</strong><br>
-                            Your patient profile has been created successfully. Navigate to the "Patient Profile" page to view and edit your data.
-                        </div>
-                        """, unsafe_allow_html=True)
-                        
-                    except json.JSONDecodeError:
-                        st.error("Error parsing the generated patient profile. Please try again.")
-                    
-                    # Clean up temporary files
-                    cleanup_temp_files(temp_files)
-                        
-                except Exception as e:
-                    st.error(f"An error occurred during processing: {str(e)}")
+                        os.unlink(temp_path)
+                    except:
+                        pass
 
-elif page == "👤 Patient Profile":
-    st.markdown('<h2 class="section-header">Patient Profile</h2>', unsafe_allow_html=True)
+elif page == "Patient Profile":
+    st.title("👤 Patient Profile")
     
-    if st.session_state.patient_profile is None:
-        st.markdown("""
-        <div class="warning-box">
-            <strong>⚠️ No Patient Profile Found</strong><br>
-            Please upload and process your medical documents first using the "Upload Documents" page.
-        </div>
-        """, unsafe_allow_html=True)
+    if not st.session_state.patient_profile:
+        st.warning("⚠️ No patient profile data available. Please upload and process documents first.")
+        st.info("👈 Go to 'Upload Documents' to get started.")
     else:
-        st.markdown("""
-        <div class="info-box">
-            <strong>Your Medical Profile:</strong><br>
-            Review and edit your extracted medical information below. You can modify any fields as needed.
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown("Your complete medical profile extracted from uploaded documents.")
         
-        # Create editable form
-        with st.form("patient_profile_form"):
-            st.subheader("📝 Edit Your Information")
+        # Display processing info
+        if st.session_state.processed_documents:
+            with st.expander("📋 Processing Information", expanded=False):
+                st.write("**Processed Documents:**")
+                for doc in st.session_state.processed_documents:
+                    st.write(f"• {doc}")
+                st.write(f"**Last Updated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        
+        # Convert profile data to markdown and display
+        if st.session_state.patient_profile:
+            # Handle both string and dict/object formats
+            if isinstance(st.session_state.patient_profile, str):
+                # If it's already a string (markdown), display it directly
+                profile_markdown = st.session_state.patient_profile
+            else:
+                # Convert structured data to markdown
+                profile_markdown = format_patient_data_as_markdown(st.session_state.patient_profile)
             
-            # Convert profile to editable format
-            profile_json = json.dumps(st.session_state.patient_profile, indent=2)
+            # Display the formatted profile
+            display_formatted_content(profile_markdown, "")
+        
+        # Export profile option
+        st.subheader("📤 Export Profile")
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            # Download as markdown
+            if isinstance(st.session_state.patient_profile, str):
+                profile_text = st.session_state.patient_profile
+            else:
+                profile_text = format_patient_data_as_markdown(st.session_state.patient_profile)
             
-            edited_profile = st.text_area(
-                "Patient Profile (JSON format)",
-                value=profile_json,
-                height=400,
-                help="Edit your patient profile in JSON format. Be careful to maintain valid JSON syntax."
+            st.download_button(
+                label="⬇️ Download as Markdown",
+                data=profile_text,
+                file_name=f"patient_profile_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md",
+                mime="text/markdown"
             )
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.form_submit_button("💾 Save Changes", type="primary"):
-                    try:
-                        updated_profile = json.loads(edited_profile)
-                        st.session_state.patient_profile = updated_profile
-                        st.success("✅ Profile updated successfully!")
-                    except json.JSONDecodeError:
-                        st.error("❌ Invalid JSON format. Please check your syntax.")
-            
-            with col2:
-                if st.form_submit_button("🔄 Reset to Original"):
-                    st.rerun()
         
-        # Display profile in a more readable format
-        st.subheader("📊 Profile Summary")
+        with col2:
+            # Download as JSON
+            if isinstance(st.session_state.patient_profile, str):
+                profile_json = json.dumps({"profile": st.session_state.patient_profile}, indent=2)
+            else:
+                profile_json = json.dumps(st.session_state.patient_profile, indent=2)
+            
+            st.download_button(
+                label="⬇️ Download as JSON",
+                data=profile_json,
+                file_name=f"patient_profile_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                mime="application/json"
+            )
         
-        # Create tabs for different sections
-        if isinstance(st.session_state.patient_profile, dict):
-            # Extract key information for display
-            profile = st.session_state.patient_profile
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.markdown("**Personal Information:**")
-                personal_info = {k: v for k, v in profile.items() if k.lower() in 
-                               ['name', 'age', 'gender', 'date_of_birth', 'phone', 'email', 'address']}
-                for key, value in personal_info.items():
-                    st.write(f"• **{key.replace('_', ' ').title()}:** {value}")
-            
-            with col2:
-                st.markdown("**Medical Information:**")
-                medical_info = {k: v for k, v in profile.items() if k.lower() in 
-                              ['conditions', 'medications', 'allergies', 'blood_type', 'height', 'weight']}
-                for key, value in medical_info.items():
-                    if isinstance(value, list):
-                        st.write(f"• **{key.replace('_', ' ').title()}:** {', '.join(map(str, value))}")
-                    else:
-                        st.write(f"• **{key.replace('_', ' ').title()}:** {value}")
+        with col3:
+            # Copy to clipboard button
+            if st.button("📋 Copy Profile"):
+                if isinstance(st.session_state.patient_profile, str):
+                    st.code(st.session_state.patient_profile, language='markdown')
+                else:
+                    profile_text = format_patient_data_as_markdown(st.session_state.patient_profile)
+                    st.code(profile_text, language='markdown')
 
-elif page == "💡 Health Recommendations":
-    st.markdown('<h2 class="section-header">Personalized Health Recommendations</h2>', unsafe_allow_html=True)
+elif page == "Health Recommendations":
+    st.title("💡 Health Recommendations")
     
-    if st.session_state.patient_profile is None:
-        st.markdown("""
-        <div class="warning-box">
-            <strong>⚠️ No Patient Profile Found</strong><br>
-            Please upload and process your medical documents first, then create your patient profile.
-        </div>
-        """, unsafe_allow_html=True)
+    if not st.session_state.patient_profile:
+        st.warning("⚠️ No patient profile data available. Please upload and process documents first.")
+        st.info("👈 Go to 'Upload Documents' to get started.")
     else:
-        st.markdown("""
-        <div class="info-box">
-            <strong>AI-Generated Health Recommendations:</strong><br>
-            Based on your medical profile, we'll generate personalized health goals and recommendations.
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown("Get personalized health recommendations based on your medical profile.")
         
-        if st.button("🎯 Generate Recommendations", type="primary"):
-            with st.spinner("Generating personalized recommendations..."):
+        # Display current profile summary
+        with st.expander("📊 Current Profile Summary", expanded=False):
+            st.json(st.session_state.patient_profile)
+        
+        # Generate recommendations
+        col1, col2 = st.columns([1, 3])
+        
+        with col1:
+            if st.button("🔮 Generate Recommendations", type="primary"):
                 try:
-                    recommendations_json = advise(json.dumps(st.session_state.patient_profile))
-                    recommendations = json.loads(recommendations_json)
-                    st.session_state.recommendations = recommendations
-                    
+                    with st.spinner("Generating personalized recommendations..."):
+                        recommendations = advise(st.session_state.patient_profile)
+                        st.session_state.recommendations = recommendations
+                        st.success("✅ Recommendations generated!")
                 except Exception as e:
                     st.error(f"Error generating recommendations: {str(e)}")
         
-        # Display recommendations if available
+        # Display recommendations
         if st.session_state.recommendations:
-            recommendations = st.session_state.recommendations
+            st.subheader("📋 Your Personalized Recommendations")
             
-            # Daily Goals
-            st.subheader("🌅 Daily Goals")
-            for i, goal in enumerate(recommendations.get('daily_goals', []), 1):
-                st.write(f"{i}. {goal}")
+            # Display recommendations as formatted content
+            display_formatted_content(str(st.session_state.recommendations), "")
             
-            # Short-term Goals
-            st.subheader("📅 Short-term Goals (1-4 weeks)")
-            for i, goal in enumerate(recommendations.get('short_term_goals', []), 1):
-                st.write(f"{i}. {goal}")
+            # Action buttons
+            col1, col2, col3 = st.columns(3)
             
-            # Medium-term Goals
-            st.subheader("📆 Medium-term Goals (1-6 months)")
-            for i, goal in enumerate(recommendations.get('medium_term_goals', []), 1):
-                st.write(f"{i}. {goal}")
+            with col1:
+                if st.button("🔄 Regenerate"):
+                    st.rerun()
             
-            # Long-term Goals
-            st.subheader("🎯 Long-term Goals (6+ months)")
-            for i, goal in enumerate(recommendations.get('long_term_goals', []), 1):
-                st.write(f"{i}. {goal}")
+            with col2:
+                # Download as markdown
+                recommendations_text = str(st.session_state.recommendations)
+                st.download_button(
+                    label="⬇️ Download as Markdown",
+                    data=recommendations_text,
+                    file_name=f"health_recommendations_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md",
+                    mime="text/markdown"
+                )
             
-            # General Recommendations
-            st.subheader("💡 General Recommendations")
-            for i, rec in enumerate(recommendations.get('general_recommendations', []), 1):
-                st.write(f"{i}. {rec}")
+            with col3:
+                # Copy recommendations
+                if st.button("📋 Copy Recommendations"):
+                    st.code(str(st.session_state.recommendations), language='markdown')
             
-            # Download recommendations
-            st.subheader("📥 Download Recommendations")
-            recommendations_json = json.dumps(recommendations, indent=2)
-            st.download_button(
-                label="💾 Download as JSON",
-                data=recommendations_json,
-                file_name=f"health_recommendations_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
-                mime="application/json"
-            )
+            # Disclaimer
+            st.warning("⚠️ **Medical Disclaimer:** These recommendations are for informational purposes only and should not replace professional medical advice. Always consult with your healthcare provider before making any changes to your treatment or lifestyle.")
 
 # Footer
-st.markdown("---")
+st.sidebar.markdown("---")
+st.sidebar.markdown("🏥 **Medical Document Analyzer**")
+st.sidebar.markdown("Built with Streamlit")
+st.sidebar.markdown("*Secure • Private • Efficient*")
+
+# Add some styling
 st.markdown("""
-<div style="text-align: center; color: #6b7280; font-size: 0.9rem;">
-    <p>🏥 Medical Document Analyzer | Built with Streamlit</p>
-    <p><strong>Disclaimer:</strong> This tool provides informational recommendations only. Always consult with healthcare professionals for medical decisions.</p>
-</div>
+<style>
+    .main > div {
+        padding-top: 2rem;
+    }
+    .stButton > button {
+        width: 100%;
+    }
+    .stSelectbox > div > div {
+        background-color: #f0f2f6;
+    }
+</style>
 """, unsafe_allow_html=True)
